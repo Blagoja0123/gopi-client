@@ -1,0 +1,4 @@
+name: test req
+kind: http
+method: GET
+url: ""

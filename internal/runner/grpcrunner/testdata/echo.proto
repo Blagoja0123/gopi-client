@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package echo.v1;
+
+import "google/protobuf/timestamp.proto";
+
+message Inner {
+  bool flag = 1;
+}
+
+message EchoMessage {
+  string text = 1;
+  int32 count = 2;
+  google.protobuf.Timestamp at = 3;
+  repeated string tags = 4;
+  Inner inner = 5;
+}
+
+service Echo {
+  rpc Say(EchoMessage) returns (EchoMessage);
+  rpc Chat(stream EchoMessage) returns (stream EchoMessage);
+}

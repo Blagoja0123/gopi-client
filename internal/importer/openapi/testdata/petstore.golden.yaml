@@ -1,0 +1,81 @@
+title: Swagger Petstore
+baseUrl: https://api.petstore.example.com/v1
+auth:
+    type: bearer
+    token: '{{token}}'
+requests:
+    - folder: auth
+      request:
+        name: Log in
+        kind: http
+        method: POST
+        url: '{{baseUrl}}/login'
+        body:
+            type: form
+            form:
+                - key: password
+                  value: ""
+                - key: username
+                  value: ""
+    - folder: pets
+      request:
+        name: List all pets
+        kind: http
+        method: GET
+        url: '{{baseUrl}}/pets'
+        params:
+            - key: limit
+              value: "0"
+              disabled: true
+            - key: status
+              value: available
+    - folder: pets
+      request:
+        name: Create a pet
+        kind: http
+        method: POST
+        url: '{{baseUrl}}/pets'
+        body:
+            type: json
+            content: |-
+                {
+                  "id": 0,
+                  "name": "doggie",
+                  "owner": {
+                    "email": "user@example.com",
+                    "pets": []
+                  },
+                  "photoUrls": [
+                    "https://example.com"
+                  ],
+                  "status": "available"
+                }
+        docs: Adds a pet to the store.
+    - folder: pets
+      request:
+        name: showPetById
+        kind: http
+        method: GET
+        url: '{{baseUrl}}/pets/{{petId}}'
+        headers:
+            - key: X-Request-ID
+              value: ""
+              disabled: true
+    - folder: pets
+      request:
+        name: Delete a pet
+        kind: http
+        method: DELETE
+        url: '{{baseUrl}}/pets/{{petId}}'
+        auth:
+            type: apikey
+            key: X-API-Key
+            value: '{{apiKey}}'
+    - folder: ""
+      request:
+        name: Inventory
+        kind: http
+        method: GET
+        url: '{{baseUrl}}/store/inventory'
+        auth:
+            type: none

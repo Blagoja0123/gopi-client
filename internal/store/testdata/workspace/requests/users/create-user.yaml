@@ -1,0 +1,13 @@
+name: Create user
+kind: http
+method: POST
+url: '{{baseUrl}}/users'
+body:
+  type: json
+  content: |-
+    {
+      "name": "Ada"
+    }
+settings:
+  timeoutMs: 5000
+  followRedirects: false

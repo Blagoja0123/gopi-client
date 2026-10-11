@@ -1,0 +1,6 @@
+headers:
+  - key: X-Team
+    value: core
+auth:
+  type: bearer
+  token: '{{token}}'

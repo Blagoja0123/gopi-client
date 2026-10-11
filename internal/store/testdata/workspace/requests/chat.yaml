@@ -1,0 +1,7 @@
+name: Chat
+kind: ws
+url: ws://localhost:8080/chat
+ws:
+  messages:
+    - name: hello
+      content: '{"type":"hello"}'

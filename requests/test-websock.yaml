@@ -1,0 +1,4 @@
+name: test websock
+kind: ws
+url: ""
+ws: {}

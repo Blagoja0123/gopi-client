@@ -1,0 +1,15 @@
+title: Legacy API
+baseUrl: https://legacy.example.com/api
+requests:
+    - folder: orders
+      request:
+        name: Update order
+        kind: http
+        method: PUT
+        url: '{{baseUrl}}/orders/{{id}}'
+        body:
+            type: json
+            content: |-
+                {
+                  "qty": 2
+                }

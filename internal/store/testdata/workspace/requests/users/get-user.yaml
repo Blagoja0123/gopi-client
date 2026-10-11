@@ -1,0 +1,16 @@
+name: Get user
+kind: http
+method: GET
+url: '{{baseUrl}}/users/{{id}}'
+params:
+  - key: expand
+    value: profile
+  - key: debug
+    value: "true"
+    disabled: true
+headers:
+  - key: Accept
+    value: application/json
+auth:
+  type: inherit
+docs: Fetches a single user.

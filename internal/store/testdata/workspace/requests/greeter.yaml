@@ -1,0 +1,10 @@
+name: Health check
+kind: grpc
+url: localhost:50051
+body:
+  type: json
+  content: '{}'
+grpc:
+  service: grpc.health.v1.Health
+  method: Check
+  plaintext: true

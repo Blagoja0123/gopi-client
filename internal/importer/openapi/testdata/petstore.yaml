@@ -1,0 +1,120 @@
+openapi: 3.0.3
+info:
+  title: Swagger Petstore
+  version: 1.0.0
+servers:
+  - url: https://{env}.petstore.example.com/v1
+    variables:
+      env:
+        default: api
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  schemas:
+    Pet:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+          example: doggie
+        status:
+          type: string
+          enum: [available, pending, sold]
+        photoUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+        owner:
+          $ref: '#/components/schemas/Owner'
+    Owner:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        pets:
+          type: array
+          items:
+            $ref: '#/components/schemas/Pet'
+security:
+  - bearerAuth: []
+paths:
+  /pets:
+    get:
+      tags: [pets]
+      summary: List all pets
+      operationId: listPets
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [available, sold]
+    post:
+      tags: [pets]
+      summary: Create a pet
+      description: Adds a pet to the store.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pet'
+  /pets/{petId}:
+    get:
+      tags: [pets]
+      operationId: showPetById
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-Request-ID
+          in: header
+          schema:
+            type: string
+    delete:
+      tags: [pets]
+      summary: Delete a pet
+      security:
+        - apiKey: []
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: string
+  /store/inventory:
+    get:
+      summary: Inventory
+      security: []
+  /login:
+    post:
+      tags: [auth]
+      summary: Log in
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string

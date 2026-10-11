@@ -1,0 +1,7 @@
+name: test grpc
+kind: grpc
+url: ""
+body:
+  type: json
+  content: '{}'
+grpc: {}

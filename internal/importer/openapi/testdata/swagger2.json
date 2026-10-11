@@ -1,0 +1,20 @@
+{
+  "swagger": "2.0",
+  "info": {"title": "Legacy API", "version": "1"},
+  "host": "legacy.example.com",
+  "basePath": "/api",
+  "schemes": ["https"],
+  "paths": {
+    "/orders/{id}": {
+      "put": {
+        "tags": ["orders"],
+        "summary": "Update order",
+        "consumes": ["application/json"],
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "type": "integer"},
+          {"name": "body", "in": "body", "schema": {"type": "object", "properties": {"qty": {"type": "integer", "example": 2}}}}
+        ]
+      }
+    }
+  }
+}

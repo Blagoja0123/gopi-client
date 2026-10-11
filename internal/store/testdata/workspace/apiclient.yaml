@@ -1,0 +1,5 @@
+name: demo
+version: 1
+variables:
+  - key: baseUrl
+    value: https://api.example.com
