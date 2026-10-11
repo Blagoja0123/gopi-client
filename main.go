@@ -6,6 +6,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/linux"
 )
 
 //go:embed all:frontend/dist
@@ -28,6 +29,9 @@ func main() {
 		BackgroundColour: &options.RGBA{R: 24, G: 24, B: 27, A: 1},
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
+		// Must match StartupWMClass in build/linux/gopiclient.desktop so the
+		// window groups with its launcher icon.
+		Linux: &linux.Options{ProgramName: "gopiclient"},
 		Bind: []interface{}{
 			app,
 		},

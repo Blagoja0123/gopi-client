@@ -1,5 +1,6 @@
 name: Release
 
+# Push a tag like v1.2.3 (or v1.3.0-rc.1 for a pre-release) to publish.
 on:
   push:
     tags: ['v*']
@@ -7,6 +8,9 @@ on:
 permissions:
   contents: write
 
+# Asset names carry no version so that
+#   https://github.com/<repo>/releases/latest/download/<asset>
+# always points at the newest release (used by scripts/install.*).
 jobs:
   test:
     uses: ./.github/workflows/ci.yml
@@ -17,22 +21,32 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            platform: linux/amd64
-            tags: webkit2_41
-            name: linux-amd64
+          # Build Linux on the oldest supported Ubuntu: the binary links
+          # against the build host's glibc, so older = runs on more distros.
+          - os: ubuntu-22.04
+            target: linux
+            arch: amd64
+          - os: ubuntu-22.04-arm
+            target: linux
+            arch: arm64
           - os: windows-latest
-            platform: windows/amd64
-            tags: ""
-            name: windows-amd64
+            target: windows
+            arch: amd64
           - os: macos-latest
-            platform: darwin/universal
-            tags: ""
-            name: macos-universal
+            target: macos
+            arch: universal
     runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash
+    env:
+      # Optional macOS signing + notarization; skipped when unset.
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -51,40 +65,101 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
-      - name: Install Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
-
-      - name: Build
-        env:
-          TAGS: ${{ matrix.tags }}
-        run: |
-          ARGS=""
-          if [ -n "$TAGS" ]; then ARGS="-tags $TAGS"; fi
-          wails build -clean -platform ${{ matrix.platform }} $ARGS
-
-      - name: Package (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          mkdir dist
-          tar -czf "dist/apiclient-${GITHUB_REF_NAME}-${{ matrix.name }}.tar.gz" -C build/bin apiclient
-
-      - name: Package (Windows)
+      - name: Install NSIS
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory dist | Out-Null
-          Compress-Archive -Path build/bin/apiclient.exe -DestinationPath "dist/apiclient-$env:GITHUB_REF_NAME-${{ matrix.name }}.zip"
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            choco install nsis -y --no-progress
+            Add-Content $env:GITHUB_PATH "C:\Program Files (x86)\NSIS"
+          }
 
-      - name: Package (macOS)
-        if: runner.os == 'macOS'
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+
+      - name: Set version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          # Windows/macOS metadata needs a plain X.Y.Z (no -rc.1 suffix).
+          jq --arg v "${VERSION%%-*}" '.info.productVersion = $v' wails.json > wails.json.tmp
+          mv wails.json.tmp wails.json
+
+      - name: Build (Linux)
+        if: matrix.target == 'linux'
+        run: wails build -clean -platform linux/${{ matrix.arch }} -tags webkit2_41
+
+      - name: Build (Windows)
+        if: matrix.target == 'windows'
+        run: wails build -clean -platform windows/amd64 -nsis
+
+      - name: Build (macOS)
+        if: matrix.target == 'macos'
+        run: wails build -clean -platform darwin/universal
+
+      - name: Package (Linux)
+        if: matrix.target == 'linux'
+        env:
+          GOARCH: ${{ matrix.arch }}
         run: |
           mkdir dist
-          ditto -c -k --keepParent build/bin/apiclient.app "dist/apiclient-${GITHUB_REF_NAME}-${{ matrix.name }}.zip"
+          name="gopi-client_linux_${{ matrix.arch }}"
+          nfpm package -f build/linux/nfpm.yaml -p deb -t "dist/$name.deb"
+          nfpm package -f build/linux/nfpm.yaml -p rpm -t "dist/$name.rpm"
+          # Plain archive for other distros (used by install.sh's per-user mode).
+          mkdir tarball
+          cp build/bin/apiclient build/linux/gopiclient.desktop tarball/
+          cp build/appicon.png tarball/apiclient.png
+          tar -czf "dist/$name.tar.gz" -C tarball .
+
+      - name: Package (Windows)
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item build/bin/apiclient-amd64-installer.exe dist/gopi-client_windows_amd64_setup.exe
+          Compress-Archive -Path build/bin/apiclient.exe -DestinationPath dist/gopi-client_windows_amd64_portable.zip
+
+      - name: Prepare app bundle (macOS)
+        if: matrix.target == 'macos'
+        run: |
+          mkdir -p dist dmg
+          ditto build/bin/apiclient.app "dmg/Gopi Client.app"
+
+      - name: Sign app (macOS, optional)
+        if: matrix.target == 'macos' && env.MACOS_CERTIFICATE != ''
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN"
+          codesign --force --deep --options runtime --timestamp --sign "$MACOS_SIGN_IDENTITY" "dmg/Gopi Client.app"
+
+      - name: Package (macOS)
+        if: matrix.target == 'macos'
+        run: |
+          ditto -c -k --keepParent "dmg/Gopi Client.app" dist/gopi-client_macos_universal.zip
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "Gopi Client" -srcfolder dmg -ov -format UDZO dist/gopi-client_macos_universal.dmg
+
+      - name: Notarize (macOS, optional)
+        if: matrix.target == 'macos' && env.MACOS_CERTIFICATE != ''
+        run: |
+          codesign --force --timestamp --sign "$MACOS_SIGN_IDENTITY" dist/gopi-client_macos_universal.dmg
+          xcrun notarytool submit dist/gopi-client_macos_universal.dmg \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple dist/gopi-client_macos_universal.dmg
 
       - uses: actions/upload-artifact@v4
         with:
-          name: apiclient-${{ matrix.name }}
+          name: gopi-client-${{ matrix.target }}-${{ matrix.arch }}
           path: dist/*
 
   release:
@@ -96,8 +171,79 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum -- * > SHA256SUMS
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
+        run: |
+          cat > notes.md <<EOF
+          ## Install
+
+          **Windows** (PowerShell):
+          \`\`\`powershell
+          irm https://raw.githubusercontent.com/${GH_REPO}/master/scripts/install.ps1 | iex
+          \`\`\`
+          or download \`gopi-client_windows_amd64_setup.exe\` below.
+
+          **macOS / Linux**:
+          \`\`\`sh
+          curl -fsSL https://raw.githubusercontent.com/${GH_REPO}/master/scripts/install.sh | sh
+          \`\`\`
+          or download the \`.dmg\` (macOS), \`.deb\` (Debian/Ubuntu) or \`.rpm\` (Fedora/openSUSE) below.
+
+          EOF
+          flags=()
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" dist/* --notes-file notes.md --generate-notes "${flags[@]}"
+
+  # Install the just-published release with the same scripts users run.
+  verify-install:
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+          - os: ubuntu-latest
+            container: fedora:latest
+          - os: macos-latest
+          - os: windows-latest
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install (Linux)
+        if: runner.os == 'Linux'
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          if command -v dnf >/dev/null; then dnf install -y /usr/bin/ldd; fi
+          sh scripts/install.sh
+          test -x /usr/bin/apiclient
+          test -f /usr/share/applications/gopiclient.desktop
+          if ldd /usr/bin/apiclient | grep 'not found'; then exit 1; fi
+
+      - name: Install (macOS)
+        if: runner.os == 'macOS'
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          sh scripts/install.sh
+          app="/Applications/Gopi Client.app/Contents/MacOS/apiclient"
+          test -x "$app"
+          lipo -archs "$app" | grep -q arm64
+          lipo -archs "$app" | grep -q x86_64
+
+      - name: Install (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          ./scripts/install.ps1
+          if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Gopi Client\apiclient.exe")) { throw 'apiclient.exe not installed' }

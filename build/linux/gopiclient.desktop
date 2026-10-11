@@ -4,6 +4,6 @@ Name=Gopi Client
 Comment=Minimal API client for REST, gRPC, WebSockets and webhooks
 Exec=apiclient
 Icon=apiclient
-Categories=Development;Network;
+Categories=Development;WebDevelopment;
 Terminal=false
 StartupWMClass=gopiclient

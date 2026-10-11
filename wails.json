@@ -9,5 +9,12 @@
   "author": {
     "name": "Blagoja0123",
     "email": "blagoja01234@gmail.com"
+  },
+  "info": {
+    "companyName": "Blagoja0123",
+    "productName": "Gopi Client",
+    "productVersion": "0.0.0",
+    "copyright": "Copyright © Blagoja0123. Licensed under Apache-2.0.",
+    "comments": "Minimal API client for REST, gRPC, WebSockets and webhooks"
   }
 }

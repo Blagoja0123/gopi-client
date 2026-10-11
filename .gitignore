@@ -4,3 +4,4 @@ frontend/dist
 /apiclient
 *.secret.yaml
 .apiclient/
+/dist

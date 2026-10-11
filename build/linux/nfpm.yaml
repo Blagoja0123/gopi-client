@@ -1,0 +1,36 @@
+# Linux packages (.deb / .rpm). Built by .github/workflows/release.yml:
+#   VERSION=1.2.3 GOARCH=amd64 nfpm package -f build/linux/nfpm.yaml -p deb
+# Declaring webkit as a dependency lets `apt install ./x.deb` / `dnf install
+# ./x.rpm` pull it in, so users don't have to know about it.
+name: gopi-client
+version: ${VERSION}
+arch: ${GOARCH}
+platform: linux
+section: devel
+priority: optional
+maintainer: Blagoja0123 <blagoja01234@gmail.com>
+vendor: Blagoja0123
+homepage: https://github.com/Blagoja0123/gopi-client
+license: Apache-2.0
+description: Minimal API client for REST, gRPC, WebSockets and webhooks.
+
+contents:
+  - src: build/bin/apiclient
+    dst: /usr/bin/apiclient
+    file_info:
+      mode: 0755
+  - src: build/linux/gopiclient.desktop
+    dst: /usr/share/applications/gopiclient.desktop
+  - src: build/appicon.png
+    dst: /usr/share/pixmaps/apiclient.png
+
+overrides:
+  deb:
+    depends:
+      - libwebkit2gtk-4.1-0
+  rpm:
+    # Depend on the shared libraries rather than package names, which differ
+    # between Fedora/RHEL (webkit2gtk4.1) and openSUSE (libwebkit2gtk-4_1-0).
+    depends:
+      - libwebkit2gtk-4.1.so.0()(64bit)
+      - libgtk-3.so.0()(64bit)
